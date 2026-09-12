@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:22.17.0-alpine AS deps
+FROM node:26.8-alpine AS deps
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@10.15.1 --activate
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* .npmrc ./
@@ -18,7 +18,7 @@ RUN pnpm --filter @impro/shared build && pnpm --filter @impro/types build && pnp
 WORKDIR /app/apps/api
 RUN pnpm prisma generate && pnpm build
 
-FROM node:22.17.0-alpine AS runner
+FROM node:26.8-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 RUN apk add --no-cache wget openssl libc6-compat \
