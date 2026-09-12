@@ -1,0 +1,406 @@
+# Impro core stack. Bridges are optional Compose profiles.
+#   docker compose up -d
+#   docker compose --profile telegram --profile whatsapp up -d
+#
+# Pinned versions (do not use :latest in production):
+#   Synapse v1.160.0  MAS 1.24.0  Postgres 16  Redis 7.4  Caddy 2.10
+#   mautrix-* v26.08  (meta messenger v26.08.1, instagram ig-v26.08)
+
+name: impro
+
+networks:
+  edge:
+    driver: bridge
+  internal:
+    driver: bridge
+    internal: false
+
+volumes:
+  postgres-data:
+  redis-data:
+  synapse-data:
+  mas-data:
+  caddy-data:
+  caddy-config:
+  media-data:
+
+services:
+  postgres:
+    image: postgres:16.10-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      IMPRO_DB_USER: ${IMPRO_DB_USER}
+      IMPRO_DB_PASSWORD: ${IMPRO_DB_PASSWORD}
+      IMPRO_DB_NAME: ${IMPRO_DB_NAME}
+      SYNAPSE_DB_USER: ${SYNAPSE_DB_USER}
+      SYNAPSE_DB_PASSWORD: ${SYNAPSE_DB_PASSWORD}
+      SYNAPSE_DB_NAME: ${SYNAPSE_DB_NAME}
+      MAS_DB_USER: ${MAS_DB_USER}
+      MAS_DB_PASSWORD: ${MAS_DB_PASSWORD}
+      MAS_DB_NAME: ${MAS_DB_NAME}
+      MAUTRIX_WHATSAPP_DB_USER: ${MAUTRIX_WHATSAPP_DB_USER}
+      MAUTRIX_WHATSAPP_DB_PASSWORD: ${MAUTRIX_WHATSAPP_DB_PASSWORD}
+      MAUTRIX_WHATSAPP_DB_NAME: ${MAUTRIX_WHATSAPP_DB_NAME}
+      MAUTRIX_TELEGRAM_DB_USER: ${MAUTRIX_TELEGRAM_DB_USER}
+      MAUTRIX_TELEGRAM_DB_PASSWORD: ${MAUTRIX_TELEGRAM_DB_PASSWORD}
+      MAUTRIX_TELEGRAM_DB_NAME: ${MAUTRIX_TELEGRAM_DB_NAME}
+      MAUTRIX_SIGNAL_DB_USER: ${MAUTRIX_SIGNAL_DB_USER}
+      MAUTRIX_SIGNAL_DB_PASSWORD: ${MAUTRIX_SIGNAL_DB_PASSWORD}
+      MAUTRIX_SIGNAL_DB_NAME: ${MAUTRIX_SIGNAL_DB_NAME}
+      MAUTRIX_INSTAGRAM_DB_USER: ${MAUTRIX_INSTAGRAM_DB_USER}
+      MAUTRIX_INSTAGRAM_DB_PASSWORD: ${MAUTRIX_INSTAGRAM_DB_PASSWORD}
+      MAUTRIX_INSTAGRAM_DB_NAME: ${MAUTRIX_INSTAGRAM_DB_NAME}
+      MAUTRIX_MESSENGER_DB_USER: ${MAUTRIX_MESSENGER_DB_USER}
+      MAUTRIX_MESSENGER_DB_PASSWORD: ${MAUTRIX_MESSENGER_DB_PASSWORD}
+      MAUTRIX_MESSENGER_DB_NAME: ${MAUTRIX_MESSENGER_DB_NAME}
+      MAUTRIX_DISCORD_DB_USER: ${MAUTRIX_DISCORD_DB_USER}
+      MAUTRIX_DISCORD_DB_PASSWORD: ${MAUTRIX_DISCORD_DB_PASSWORD}
+      MAUTRIX_DISCORD_DB_NAME: ${MAUTRIX_DISCORD_DB_NAME}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - effective_cache_size=256MB
+      - -c
+      - max_connections=100
+      - -c
+      - wal_buffers=8MB
+      - -c
+      - log_min_duration_statement=1000
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 256m
+    logging: &default-log
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7.4.5-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --maxmemory
+      - 48mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+    volumes:
+      - redis-data:/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: 64m
+    logging: *default-log
+
+  synapse:
+    image: matrixdotorg/synapse:v1.160.0
+    restart: unless-stopped
+    environment:
+      SYNAPSE_CONFIG_PATH: /data/homeserver.yaml
+      SYNAPSE_CACHE_FACTOR: "0.1"
+    volumes:
+      - ./infra/synapse:/data:rw
+      - synapse-data:/data/media_store
+      - ./infra/bridges:/bridges:ro
+    networks: [internal, edge]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/health')\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+    mem_limit: 512m
+    logging: *default-log
+
+  mas:
+    image: ghcr.io/element-hq/matrix-authentication-service:1.24.0
+    restart: unless-stopped
+    command: ["server"]
+    environment:
+      MAS_CONFIG: /data/config.yaml
+    volumes:
+      - ./infra/mas:/data:rw
+    networks: [internal, edge]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      synapse:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "mas-cli --help >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    mem_limit: 192m
+    logging: *default-log
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    image: impro-api:0.1.0
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: "3000"
+      DATABASE_URL: postgresql://${IMPRO_DB_USER}:${IMPRO_DB_PASSWORD}@postgres:5432/${IMPRO_DB_NAME}?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      MATRIX_HOMESERVER_INTERNAL: http://synapse:8008
+      MAS_INTERNAL_URL: http://mas:8080
+      MAS_ADMIN_URL: http://mas:8081
+      SYNAPSE_ADMIN_INTERNAL: http://synapse:8008
+      BRIDGE_WHATSAPP_URL: http://bridge-whatsapp:29318
+      BRIDGE_TELEGRAM_URL: http://bridge-telegram:29317
+      BRIDGE_SIGNAL_URL: http://bridge-signal:29328
+      BRIDGE_INSTAGRAM_URL: http://bridge-instagram:29330
+      BRIDGE_MESSENGER_URL: http://bridge-messenger:29319
+      BRIDGE_DISCORD_URL: http://bridge-discord:29334
+      BRIDGE_PROVISIONING_SECRET: ${BRIDGE_PROVISIONING_SECRET:-}
+    volumes:
+      - media-data:/data/media
+      - ./packages/shared:/app/node_modules/@impro/shared:ro
+      - ./packages/types:/app/node_modules/@impro/types:ro
+      - ./packages/config:/app/node_modules/@impro/config:ro
+      - ./infra/bridges:/app/bridges:ro
+    networks: [internal, edge]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      synapse:
+        condition: service_healthy
+      mas:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    mem_limit: 320m
+    logging: *default-log
+
+  worker:
+    image: impro-api:0.1.0
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      ROLE: worker
+      DATABASE_URL: postgresql://${IMPRO_DB_USER}:${IMPRO_DB_PASSWORD}@postgres:5432/${IMPRO_DB_NAME}?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      MATRIX_HOMESERVER_INTERNAL: http://synapse:8008
+      MAS_INTERNAL_URL: http://mas:8080
+    volumes:
+      - ./packages/shared:/app/node_modules/@impro/shared:ro
+      - ./packages/types:/app/node_modules/@impro/types:ro
+      - ./packages/config:/app/node_modules/@impro/config:ro
+    networks: [internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"process.exit(0)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    mem_limit: 192m
+    logging: *default-log
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        VITE_API_URL: ${API_URL}
+        VITE_APP_URL: ${APP_URL}
+        VITE_SITE_URL: ${SITE_URL}
+        VITE_MATRIX_URL: ${MATRIX_PUBLIC_URL}
+        VITE_AUTH_URL: ${AUTH_PUBLIC_URL}
+        VITE_SERVER_NAME: ${MATRIX_SERVER_NAME}
+        VITE_APP_HOST: ${APP_HOST}
+    image: impro-web:0.1.0
+    restart: unless-stopped
+    networks: [edge]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+    mem_limit: 64m
+    logging: *default-log
+
+  proxy:
+    image: caddy:2.10.0-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+      - "8448:8448"
+    environment:
+      DOMAIN: ${DOMAIN}
+      SCHEME: ${SCHEME}
+      ACME_EMAIL: ${ACME_EMAIL}
+      CADDY_AUTO_HTTPS: ${CADDY_AUTO_HTTPS}
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./infra/caddy/well-known:/etc/caddy/well-known:ro
+      - ./infra/caddy/landing:/etc/caddy/landing:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [edge]
+    depends_on:
+      - web
+      - api
+      - synapse
+      - mas
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:2019/config/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    mem_limit: 192m
+    logging: *default-log
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    profiles: ["mail"]
+    ports:
+      - "127.0.0.1:8025:8025"
+    networks: [internal]
+    mem_limit: 64m
+    logging: *default-log
+
+  # ---------------------------------------------------------------------------
+  # Bridges — optional, isolated. Provisioning APIs stay on the internal network.
+  # ---------------------------------------------------------------------------
+  bridge-whatsapp:
+    image: dock.mau.dev/mautrix/whatsapp:v26.08
+    restart: unless-stopped
+    profiles: ["whatsapp"]
+    volumes:
+      - ./infra/bridges/whatsapp:/data
+    networks: [internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      synapse:
+        condition: service_healthy
+    mem_limit: 192m
+    logging: *default-log
+
+  bridge-telegram:
+    image: dock.mau.dev/mautrix/telegram:v26.08
+    restart: unless-stopped
+    profiles: ["telegram"]
+    volumes:
+      - ./infra/bridges/telegram:/data
+    networks: [internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      synapse:
+        condition: service_healthy
+    mem_limit: 192m
+    logging: *default-log
+
+  bridge-signal:
+    image: dock.mau.dev/mautrix/signal:v26.08
+    restart: unless-stopped
+    profiles: ["signal"]
+    volumes:
+      - ./infra/bridges/signal:/data
+    networks: [internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      synapse:
+        condition: service_healthy
+    mem_limit: 256m
+    logging: *default-log
+
+  bridge-instagram:
+    image: dock.mau.dev/mautrix/meta:ig-v26.08
+    restart: unless-stopped
+    profiles: ["instagram"]
+    volumes:
+      - ./infra/bridges/instagram:/data
+    networks: [internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      synapse:
+        condition: service_healthy
+    mem_limit: 192m
+    logging: *default-log
+
+  bridge-messenger:
+    image: dock.mau.dev/mautrix/meta:v26.08.1
+    restart: unless-stopped
+    profiles: ["messenger"]
+    volumes:
+      - ./infra/bridges/messenger:/data
+    networks: [internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      synapse:
+        condition: service_healthy
+    mem_limit: 192m
+    logging: *default-log
+
+  bridge-discord:
+    image: dock.mau.dev/mautrix/discord:latest
+    restart: unless-stopped
+    profiles: ["discord"]
+    volumes:
+      - ./infra/bridges/discord:/data
+    networks: [internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      synapse:
+        condition: service_healthy
+    mem_limit: 192m
+    logging: *default-log

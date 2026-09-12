@@ -1,0 +1,479 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WorkspaceRole {
+  owner
+  admin
+  manager
+  agent
+  member
+}
+
+enum ConversationKind {
+  dm
+  group
+  channel
+  bridged
+}
+
+enum ConversationStatus {
+  open
+  pending
+  resolved
+}
+
+enum ShareHistoryPolicy {
+  from_now
+  last_24h
+  last_7d
+  entire
+}
+
+enum ConnectionStatus {
+  connected
+  connecting
+  syncing
+  disconnected
+  needs_attention
+  unavailable
+  experimental
+  setup_required
+}
+
+enum AssignmentState {
+  unassigned
+  assigned
+}
+
+model User {
+  id              String   @id @default(uuid()) @db.Uuid
+  username        String   @unique
+  displayName     String
+  email           String?  @unique
+  emailVerifiedAt DateTime?
+  avatarUrl       String?
+  matrixUserId    String   @unique
+  masUserId       String?
+  isGlobalAdmin   Boolean  @default(false)
+  isSuspended     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  profile           UserProfile?
+  sessions          Session[]
+  connections       Connection[]
+  ownedConversations Conversation[] @relation("ConversationOwner")
+  contacts          Contact[]
+  companies         Company[]
+  workspacesOwned   Workspace[]     @relation("WorkspaceOwner")
+  memberships       WorkspaceMember[]
+  assignments       Assignment[]    @relation("Assignee")
+  assignedBy        Assignment[]    @relation("AssignedBy")
+  notes             InternalNote[]
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+  snoozes           Snooze[]
+}
+
+model UserProfile {
+  userId         String   @id @db.Uuid
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio            String?
+  timezone       String?
+  locale         String   @default("en")
+  theme          String   @default("system")
+  aiOptIn        Boolean  @default(false)
+  notifyPrefs    Json     @default("{}")
+  onboardingDone Boolean  @default(false)
+}
+
+model Session {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @db.Uuid
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId         String?
+  deviceName       String?
+  refreshHash      String
+  matrixAccessEnc  String
+  matrixRefreshEnc String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime @default(now())
+  ip               String?
+  userAgent        String?
+
+  @@index([userId])
+}
+
+model Workspace {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  ownerUserId String   @db.Uuid
+  owner       User     @relation("WorkspaceOwner", fields: [ownerUserId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  aiPolicy    String   @default("opt_in")
+
+  members     WorkspaceMember[]
+  invites     WorkspaceInvite[]
+  shares      ConversationShare[]
+  tags        Tag[]
+  savedReplies SavedReply[]
+  sla         SlaPolicy?
+  automations AutomationRule[]
+  channels    Conversation[] @relation("WorkspaceChannels")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid()) @db.Uuid
+  workspaceId String        @db.Uuid
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String        @db.Uuid
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        WorkspaceRole @default(member)
+  createdAt   DateTime      @default(now())
+
+  @@unique([workspaceId, userId])
+}
+
+model WorkspaceInvite {
+  id          String        @id @default(uuid()) @db.Uuid
+  workspaceId String        @db.Uuid
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  email       String?
+  username    String?
+  role        WorkspaceRole @default(agent)
+  token       String        @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime      @default(now())
+}
+
+model Connection {
+  id               String           @id @default(uuid()) @db.Uuid
+  ownerUserId      String           @db.Uuid
+  owner            User             @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  network          String
+  displayName      String
+  remoteAccountId  String?
+  avatar           String?
+  status           ConnectionStatus @default(disconnected)
+  health           String           @default("unknown")
+  lastSyncAt       DateTime?
+  capabilities     Json             @default("{}")
+  encryptedCreds   String?
+  lastError        String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  permissions ConnectionPermission[]
+  conversations Conversation[]
+  identities  ContactIdentity[]
+
+  @@index([ownerUserId, network])
+}
+
+model ConnectionPermission {
+  id           String     @id @default(uuid()) @db.Uuid
+  connectionId String     @db.Uuid
+  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  workspaceId  String     @db.Uuid
+  canView      Boolean    @default(true)
+  canReply     Boolean    @default(false)
+  canManage    Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+
+  @@unique([connectionId, workspaceId])
+}
+
+model Company {
+  id          String   @id @default(uuid()) @db.Uuid
+  ownerUserId String   @db.Uuid
+  owner       User     @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  name        String
+  website     String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  contacts    Contact[]
+}
+
+model Contact {
+  id           String   @id @default(uuid()) @db.Uuid
+  ownerUserId  String   @db.Uuid
+  owner        User     @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  displayName  String
+  avatar       String?
+  email        String?
+  phone        String?
+  companyId    String?  @db.Uuid
+  company      Company? @relation(fields: [companyId], references: [id])
+  notes        String?
+  customFields Json     @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  identities    ContactIdentity[]
+  conversations Conversation[]
+}
+
+model ContactIdentity {
+  id                 String      @id @default(uuid()) @db.Uuid
+  contactId          String      @db.Uuid
+  contact            Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  network            String
+  connectionId       String?     @db.Uuid
+  connection         Connection? @relation(fields: [connectionId], references: [id])
+  remoteId           String
+  remoteUsername     String?
+  remotePhone        String?
+  remoteDisplayName  String?
+  remoteAvatar       String?
+  createdAt          DateTime    @default(now())
+
+  @@unique([network, remoteId, connectionId])
+  @@index([contactId])
+}
+
+model Conversation {
+  id                   String             @id @default(uuid()) @db.Uuid
+  ownerUserId          String             @db.Uuid
+  owner                User               @relation("ConversationOwner", fields: [ownerUserId], references: [id])
+  matrixRoomId         String?
+  connectionId         String?            @db.Uuid
+  connection           Connection?        @relation(fields: [connectionId], references: [id])
+  network              String             @default("impro")
+  remoteConversationId String?
+  contactId            String?            @db.Uuid
+  contact              Contact?           @relation(fields: [contactId], references: [id])
+  title                String
+  avatar               String?
+  type                 ConversationKind   @default(dm)
+  lastMessageAt        DateTime?
+  lastMessagePreview   String?
+  unreadCount          Int                @default(0)
+  archived             Boolean            @default(false)
+  pinned               Boolean            @default(false)
+  starred              Boolean            @default(false)
+  muted                Boolean            @default(false)
+  workspaceChannelId   String?            @db.Uuid
+  workspace            Workspace?         @relation("WorkspaceChannels", fields: [workspaceChannelId], references: [id])
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  participants ConversationParticipant[]
+  shares       ConversationShare[]
+  assignment   Assignment?
+  tags         ConversationTag[]
+  notes        InternalNote[]
+  snoozes      Snooze[]
+  index        MessageIndex[]
+
+  @@unique([ownerUserId, matrixRoomId])
+  @@index([ownerUserId, lastMessageAt])
+  @@index([network])
+}
+
+model ConversationParticipant {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String?      @db.Uuid
+  matrixUserId   String?
+  displayName    String?
+  role           String       @default("member")
+  joinedAt       DateTime     @default(now())
+
+  @@index([conversationId])
+}
+
+model ConversationShare {
+  id             String             @id @default(uuid()) @db.Uuid
+  conversationId String             @db.Uuid
+  conversation   Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  workspaceId    String             @db.Uuid
+  workspace      Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sharedBy       String             @db.Uuid
+  sharedAt       DateTime           @default(now())
+  historyPolicy  ShareHistoryPolicy @default(from_now)
+  historyStartAt DateTime?
+  canReply       Boolean            @default(true)
+  revokedAt      DateTime?
+  status         ConversationStatus @default(open)
+  priority       String             @default("normal")
+
+  @@index([workspaceId])
+  @@index([conversationId])
+}
+
+model Assignment {
+  id             String           @id @default(uuid()) @db.Uuid
+  conversationId String           @unique @db.Uuid
+  conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  assigneeId     String?          @db.Uuid
+  assignee       User?            @relation("Assignee", fields: [assigneeId], references: [id])
+  assignedById   String?          @db.Uuid
+  assignedBy     User?            @relation("AssignedBy", fields: [assignedById], references: [id])
+  state          AssignmentState  @default(unassigned)
+  updatedAt      DateTime         @updatedAt
+}
+
+model Tag {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  color       String    @default("#5eead4")
+  conversations ConversationTag[]
+
+  @@unique([workspaceId, name])
+}
+
+model ConversationTag {
+  conversationId String       @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tagId          String       @db.Uuid
+  tag            Tag          @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, tagId])
+}
+
+model InternalNote {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  authorId       String       @db.Uuid
+  author         User         @relation(fields: [authorId], references: [id])
+  body           String
+  createdAt      DateTime     @default(now())
+}
+
+model SavedReply {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  slash       String
+  title       String
+  body        String
+
+  @@unique([workspaceId, slash])
+}
+
+model Snooze {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String       @db.Uuid
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  until          DateTime
+  createdAt      DateTime     @default(now())
+
+  @@index([until])
+}
+
+model SlaPolicy {
+  id                   String    @id @default(uuid()) @db.Uuid
+  workspaceId          String    @unique @db.Uuid
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  firstResponseMinutes Int       @default(15)
+  resolutionMinutes    Int       @default(1440)
+}
+
+model AutomationRule {
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  enabled     Boolean   @default(true)
+  definition  Json
+  createdAt   DateTime  @default(now())
+  runs        AutomationRun[]
+}
+
+model AutomationRun {
+  id        String         @id @default(uuid()) @db.Uuid
+  ruleId    String         @db.Uuid
+  rule      AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  status    String
+  detail    Json           @default("{}")
+  createdAt DateTime       @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  data      Json     @default("{}")
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorId     String?  @db.Uuid
+  actor       User?    @relation(fields: [actorId], references: [id])
+  workspaceId String?  @db.Uuid
+  action      String
+  targetType  String?
+  targetId    String?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId, createdAt])
+}
+
+model MessageIndex {
+  id             String       @id @default(uuid()) @db.Uuid
+  conversationId String       @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  ownerUserId    String       @db.Uuid
+  workspaceId    String?
+  matrixEventId  String?
+  remoteEventId  String?
+  sender         String
+  body           String
+  sentAt         DateTime
+  sourceTs       DateTime?
+  network        String
+
+  @@unique([matrixEventId])
+  @@index([conversationId, sentAt])
+  @@index([ownerUserId, sentAt])
+}
+
+model FeatureFlag {
+  key     String  @id
+  enabled Boolean @default(false)
+  payload Json    @default("{}")
+}
+
+model AiJob {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  kind      String
+  status    String
+  input     Json
+  output    Json?
+  createdAt DateTime @default(now())
+}
+
+model InboxView {
+  id          String @id @default(uuid()) @db.Uuid
+  userId      String @db.Uuid
+  workspaceId String?
+  name        String
+  query       Json
+}

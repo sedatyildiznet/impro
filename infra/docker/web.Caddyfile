@@ -1,0 +1,26 @@
+:80 {
+	encode gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+	}
+	handle /healthz {
+		respond "ok" 200
+	}
+	handle /sw.js {
+		header Cache-Control "no-cache"
+		root * /usr/share/caddy
+		file_server
+	}
+	handle /assets/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		root * /usr/share/caddy
+		file_server
+	}
+	handle {
+		root * /usr/share/caddy
+		try_files {path} /index.html
+		file_server
+	}
+}

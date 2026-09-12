@@ -1,0 +1,185 @@
+{
+	email {$ACME_EMAIL}
+	# Cloudflare proxies public HTTPS. Origin must present *some* cert or
+	# Cloudflare returns 525 SSL handshake failed. Use the internal CA
+	# (not Let's Encrypt — orange-cloud breaks HTTP-01).
+	local_certs
+	skip_install_trust
+	auto_https disable_redirects
+	admin 0.0.0.0:2019
+	servers {
+		protocols h1 h2
+	}
+}
+
+(security_headers) {
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+	}
+}
+
+(ws) {
+	header_up Host {host}
+	header_up X-Real-IP {remote_host}
+	flush_interval -1
+}
+
+(apex) {
+	import security_headers
+
+	handle /.well-known/matrix/client {
+		header Content-Type application/json
+		header Access-Control-Allow-Origin *
+		header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+		header Access-Control-Allow-Headers "X-Requested-With, Content-Type, Authorization"
+		header Access-Control-Max-Age 86400
+		root * /etc/caddy/well-known
+		rewrite * /client.json
+		file_server
+	}
+
+	handle /.well-known/matrix/server {
+		header Content-Type application/json
+		header Access-Control-Allow-Origin *
+		root * /etc/caddy/well-known
+		rewrite * /server.json
+		file_server
+	}
+
+	handle /.well-known/matrix/support {
+		header Content-Type application/json
+		root * /etc/caddy/well-known
+		rewrite * /support.json
+		file_server
+	}
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	handle /open {
+		redir https://app.{$DOMAIN}/ 302
+	}
+	handle /login {
+		redir https://app.{$DOMAIN}/login 302
+	}
+	handle /register {
+		redir https://app.{$DOMAIN}/register 302
+	}
+
+	root * /etc/caddy/landing
+	file_server
+}
+
+(app) {
+	import security_headers
+	handle /healthz {
+		respond "ok" 200
+	}
+	handle_path /api/* {
+		reverse_proxy api:3000 {
+			import ws
+		}
+	}
+	reverse_proxy web:80 {
+		import ws
+	}
+}
+
+(api) {
+	import security_headers
+	header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+	handle /health* {
+		reverse_proxy api:3000
+	}
+	reverse_proxy api:3000 {
+		import ws
+	}
+}
+
+(matrix) {
+	import security_headers
+	header Access-Control-Allow-Origin *
+	header Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+	header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+
+	@admin path /_synapse/admin /_synapse/admin/*
+	handle @admin {
+		respond "Not found" 404
+	}
+
+	@mas_compat path_regexp mascompat ^/_matrix/client/[^/]+/(login|logout|refresh)$
+	handle @mas_compat {
+		reverse_proxy mas:8080 {
+			import ws
+		}
+	}
+
+	handle /_matrix/* {
+		reverse_proxy synapse:8008 {
+			import ws
+		}
+	}
+
+	handle /_synapse/client/* {
+		reverse_proxy synapse:8008 {
+			import ws
+		}
+	}
+
+	handle /_synapse/mas/* {
+		reverse_proxy synapse:8008 {
+			import ws
+		}
+	}
+
+	handle /health {
+		reverse_proxy synapse:8008
+	}
+
+	handle {
+		respond "Not found" 404
+	}
+}
+
+(auth) {
+	import security_headers
+	@adminapi path /api/admin /api/admin/*
+	handle @adminapi {
+		respond "Not found" 404
+	}
+	reverse_proxy mas:8080 {
+		import ws
+	}
+}
+
+{$DOMAIN} {
+	import apex
+}
+
+app.{$DOMAIN} {
+	import app
+}
+
+api.{$DOMAIN} {
+	import api
+}
+
+matrix.{$DOMAIN} {
+	import matrix
+}
+
+auth.{$DOMAIN} {
+	import auth
+}
+
+:8448 {
+	reverse_proxy synapse:8008 {
+		import ws
+	}
+}

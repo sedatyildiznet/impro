@@ -1,0 +1,9 @@
+node_modules
+.git
+data
+backups
+**/dist
+**/.turbo
+infra/mas/keys
+*.log
+.pnpm-store

@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --rail: 68px;
+  --list: 340px;
+  --details: 320px;
+  color-scheme: dark;
+}
+
+html, body, #root { height: 100%; }
+body { background: #0B0D10; }
+
+.impro-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.impro-scroll::-webkit-scrollbar-thumb { background: #2a2e38; border-radius: 99px; }
+
+.network-wa { color: #25D366; }
+.network-tg { color: #2AABEE; }
+.network-sg { color: #3A76F0; }
+.network-ig { color: #E1306C; }
+.network-dc { color: #5865F2; }
+.network-impro { color: #5EEAD4; }
+.network-matrix { color: #0DBD8B; }
+
+input, textarea, button { font: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible {
+  outline: 2px solid #5EEAD4;
+  outline-offset: 2px;
+}

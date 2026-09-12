@@ -1,0 +1,141 @@
+# Matrix Authentication Service for Impro.
+# Homeserver name MUST be impro.chat so Matrix IDs are @username:impro.chat.
+# Branding is Impro — users never see "Matrix Authentication Service".
+
+http:
+  public_base: "${AUTH_PUBLIC_URL}/"
+  issuer: "${MAS_ISSUER}"
+  listeners:
+    - name: web
+      resources:
+        - name: discovery
+        - name: human
+        - name: oauth
+        - name: compat
+        - name: graphql
+        - name: assets
+      binds:
+        - address: "[::]:8080"
+    - name: internal
+      resources:
+        - name: health
+        - name: prometheus
+        - name: adminapi
+      binds:
+        - address: "[::]:8081"
+
+database:
+  uri: postgresql://${MAS_DB_USER}:${MAS_DB_PASSWORD}@postgres:5432/${MAS_DB_NAME}?sslmode=disable
+  max_connections: 8
+  min_connections: 0
+  connect_timeout: 30
+  ssl_mode: disable
+
+matrix:
+  kind: synapse
+  homeserver: impro.chat
+  endpoint: "http://synapse:8008"
+  secret: "${MAS_MATRIX_SECRET}"
+
+secrets:
+  encryption: "${MAS_ENCRYPTION_KEY}"
+  keys:
+    - kid: "impro-rsa-1"
+      key_file: /data/keys/rsa.pem
+    - kid: "impro-ec-1"
+      key_file: /data/keys/ec.pem
+
+passwords:
+  enabled: true
+  minimum_complexity: 2
+  schemes:
+    - version: 1
+      algorithm: argon2id
+
+account:
+  email_change_allowed: true
+  displayname_change_allowed: true
+  password_registration_enabled: true
+  password_registration_email_required: false
+  password_change_allowed: true
+  password_recovery_enabled: false
+  account_deactivation_allowed: true
+  login_with_email_allowed: true
+  password_registration_token_required: false
+
+branding:
+  service_name: Impro
+  policy_uri: "${SITE_URL}/privacy"
+  tos_uri: "${SITE_URL}/terms"
+  imprint: "Impro"
+
+email:
+  from: '"Impro" <noreply@impro.chat>'
+  reply_to: '"Impro" <noreply@impro.chat>'
+  transport: blackhole
+
+policy:
+  data:
+    admin_users: []
+    admin_clients:
+      - "${MAS_IMPRO_API_CLIENT_ID}"
+    client_registration:
+      allow_host_mismatch: true
+      allow_insecure_uris: true
+      allow_missing_client_uri: true
+    registration:
+      banned_usernames:
+        literals:
+          - admin
+          - administrator
+          - root
+          - system
+          - matrix
+          - synapse
+          - api
+          - auth
+          - support
+          - security
+          - moderator
+          - impro
+          - staff
+          - billing
+          - abuse
+          - notices
+          - whatsappbot
+          - telegrambot
+          - signalbot
+          - instagrambot
+          - messengerbot
+          - discordbot
+        prefixes:
+          - "admin-"
+          - "root-"
+        regexes:
+          - "^_"
+
+clients:
+  - client_id: "${MAS_IMPRO_API_CLIENT_ID}"
+    client_auth_method: client_secret_basic
+    client_secret: "${MAS_IMPRO_API_CLIENT_SECRET}"
+    redirect_uris:
+      - "${API_URL}/auth/callback"
+      - "${APP_URL}/auth/callback"
+  - client_id: "${MAS_IMPRO_WEB_CLIENT_ID}"
+    client_auth_method: none
+    redirect_uris:
+      - "${APP_URL}/auth/callback"
+      - "${APP_URL}/login"
+
+telemetry:
+  tracing:
+    exporter: none
+  metrics:
+    exporter: none
+
+captcha:
+  service: ~
+
+experimental:
+  access_token_ttl: 300
+  compat_token_ttl: 300

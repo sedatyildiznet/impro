@@ -1,0 +1,127 @@
+# Synapse homeserver for Impro.
+# server_name is the Matrix ID suffix and MUST remain impro.chat.
+# Physical client/federation endpoint is matrix.impro.chat.
+
+server_name: "impro.chat"
+pid_file: /data/homeserver.pid
+public_baseurl: "${MATRIX_PUBLIC_URL}/"
+serve_server_wellknown: false
+report_stats: false
+soft_file_limit: 0
+
+listeners:
+  - port: 8008
+    tls: false
+    type: http
+    x_forwarded: true
+    bind_addresses: ['0.0.0.0']
+    resources:
+      - names: [client, federation]
+        compress: false
+
+database:
+  name: psycopg2
+  args:
+    user: ${SYNAPSE_DB_USER}
+    password: ${SYNAPSE_DB_PASSWORD}
+    dbname: ${SYNAPSE_DB_NAME}
+    host: postgres
+    port: 5432
+    cp_min: 2
+    cp_max: 8
+    keepalives_idle: 10
+    keepalives_interval: 10
+    keepalives_count: 3
+
+log_config: "/data/log.yaml"
+media_store_path: /data/media_store
+uploads_path: /data/uploads
+max_upload_size: 50M
+max_image_pixels: 32M
+url_preview_enabled: false
+
+enable_registration: false
+enable_registration_without_verification: false
+registration_shared_secret: "${SYNAPSE_REGISTRATION_SHARED_SECRET}"
+# Profile/3PID changes are owned by MAS when delegated auth is on.
+enable_set_displayname: false
+enable_set_avatar_url: false
+enable_3pid_changes: false
+
+macaroon_secret_key: "${SYNAPSE_MACAROON_SECRET}"
+form_secret: "${SYNAPSE_FORM_SECRET}"
+signing_key_path: "/data/impro.chat.signing.key"
+
+# MAS is the authentication source of truth. Do not use the deprecated
+# experimental_features.msc3861 block.
+matrix_authentication_service:
+  enabled: true
+  endpoint: http://mas:8080/
+  secret: "${MAS_MATRIX_SECRET}"
+
+trusted_key_servers:
+  - server_name: "matrix.org"
+
+suppress_key_server_warning: true
+
+federation_domain_whitelist: []
+allow_public_rooms_without_auth: false
+allow_public_rooms_over_federation: false
+allow_profile_lookup_over_federation: true
+federation_verify_certificates: true
+
+# Presence is useful for Impro's online state but expensive; keep default on
+# for a small MVP, disable if the host is memory-constrained.
+presence:
+  enabled: true
+
+app_service_config_files: []
+
+retention:
+  enabled: false
+
+rc_message:
+  per_second: 2
+  burst_count: 20
+rc_registration:
+  per_second: 0.17
+  burst_count: 3
+rc_login:
+  address:
+    per_second: 0.17
+    burst_count: 3
+  account:
+    per_second: 0.17
+    burst_count: 3
+  failed_attempts:
+    per_second: 0.17
+    burst_count: 3
+
+push:
+  include_content: false
+
+password_config:
+  enabled: false
+
+caches:
+  global_factor: 0.1
+
+background_updates:
+  background_update_duration_ms: 100
+  sleep_duration_ms: 1000
+
+user_directory:
+  enabled: true
+  search_all_users: true
+  prefer_local_users: true
+
+room_list_publication_rules:
+  - action: allow
+
+max_event_delay_duration: 24h
+
+admin_contact: "mailto:admin@impro.chat"
+server_notices:
+  system_mxid_localpart: notices
+  system_mxid_display_name: Impro
+  room_name: "Impro notices"

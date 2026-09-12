@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Impro — all your conversations, one place</title>
+    <meta name="description" content="Impro unifies personal and business messaging. People, not platforms." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect rx='8' width='32' height='32' fill='%23090A0C'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-size='16' fill='%235EEAD4' font-family='system-ui'%3Ei%3C/text%3E%3C/svg%3E" />
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        min-height: 100vh;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+        background: radial-gradient(1200px 600px at 20% -10%, #134e4a 0%, transparent 50%),
+                    radial-gradient(900px 500px at 100% 10%, #1e1b4b 0%, transparent 45%),
+                    #090A0C;
+        color: #f4f4f5;
+        display: flex;
+        flex-direction: column;
+      }
+      header, main, footer { width: min(960px, calc(100% - 40px)); margin: 0 auto; }
+      header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 28px 0;
+      }
+      .wordmark {
+        font-weight: 650; letter-spacing: -0.04em; font-size: 22px;
+      }
+      .wordmark span { color: #5eead4; }
+      a.btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        background: #5eead4; color: #042f2e; font-weight: 600;
+        text-decoration: none; border-radius: 999px; padding: 10px 18px;
+        font-size: 14px;
+      }
+      a.btn:hover { filter: brightness(1.05); }
+      a.ghost { color: #a1a1aa; text-decoration: none; font-size: 14px; margin-right: 18px; }
+      main { flex: 1; padding: 72px 0 96px; }
+      h1 {
+        font-size: clamp(40px, 7vw, 72px); letter-spacing: -0.05em;
+        line-height: 0.95; font-weight: 650; max-width: 14ch;
+      }
+      .lede {
+        margin-top: 22px; color: #a1a1aa; font-size: 18px; max-width: 42ch; line-height: 1.5;
+      }
+      .actions { margin-top: 36px; display: flex; gap: 12px; flex-wrap: wrap; }
+      .pill {
+        border: 1px solid #27272a; background: #111113; border-radius: 16px;
+        padding: 16px 18px; margin-top: 56px; display: grid;
+        grid-template-columns: repeat(3, 1fr); gap: 12px;
+      }
+      .pill h3 { font-size: 13px; color: #5eead4; font-weight: 600; margin-bottom: 6px; }
+      .pill p { font-size: 13px; color: #a1a1aa; line-height: 1.45; }
+      footer { color: #52525b; font-size: 12px; padding: 24px 0 40px; }
+      @media (max-width: 720px) {
+        .pill { grid-template-columns: 1fr; }
+        header .ghost { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wordmark">Impro<span>.</span></div>
+      <nav>
+        <a class="ghost" href="/login">Sign in</a>
+        <a class="btn" href="/open">Open Impro</a>
+      </nav>
+    </header>
+    <main>
+      <h1>All your conversations. One place.</h1>
+      <p class="lede">
+        Personal chats and team inboxes together — WhatsApp, Telegram, Signal, Instagram and Impro,
+        without splitting your life into modes.
+      </p>
+      <div class="actions">
+        <a class="btn" href="/register">Create your account</a>
+        <a class="ghost" href="/login">I already have an account</a>
+      </div>
+      <div class="pill">
+        <div>
+          <h3>People, not platforms</h3>
+          <p>One contact across every network. Merge identities when they belong to the same person.</p>
+        </div>
+        <div>
+          <h3>Private by default</h3>
+          <p>Conversations stay yours until you explicitly share one with a workspace.</p>
+        </div>
+        <div>
+          <h3>Work when you need it</h3>
+          <p>Assignments, notes, tags and shared replies — on the conversation, not a second app.</p>
+        </div>
+      </div>
+    </main>
+    <footer>© Impro · impro.chat · Product login lives at app.impro.chat</footer>
+  </body>
+</html>

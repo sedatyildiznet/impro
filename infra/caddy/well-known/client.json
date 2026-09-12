@@ -1,0 +1,13 @@
+{
+  "m.homeserver": {
+    "base_url": "https://matrix.impro.chat"
+  },
+  "org.matrix.msc2965.authentication": {
+    "issuer": "https://auth.impro.chat/",
+    "account": "https://auth.impro.chat/account"
+  },
+  "m.authentication": {
+    "issuer": "https://auth.impro.chat/",
+    "account": "https://auth.impro.chat/account"
+  }
+}

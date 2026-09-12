@@ -1,0 +1,6 @@
+{
+  "name": "@impro/worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Worker shares the API image; see apps/api/src/worker.ts"
+}

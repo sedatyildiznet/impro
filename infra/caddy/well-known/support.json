@@ -1,0 +1,10 @@
+{
+  "contacts": [
+    {
+      "matrix_id": "@support:impro.chat",
+      "email_address": "support@impro.chat",
+      "role": "m.role.admin"
+    }
+  ],
+  "support_page": "https://impro.chat"
+}

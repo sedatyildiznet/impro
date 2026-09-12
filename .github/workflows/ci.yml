@@ -1,0 +1,24 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install
+      - run: pnpm --filter @impro/shared build
+      - run: pnpm --filter @impro/api typecheck
+      - run: pnpm --filter @impro/api test
+      - run: pnpm --filter @impro/web build
+      - run: docker compose -f docker-compose.yml config
+      - run: npm audit --audit-level=high || true
