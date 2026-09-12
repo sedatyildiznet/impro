@@ -28,7 +28,7 @@ ENV VITE_API_URL=$VITE_API_URL \
     NODE_OPTIONS=--max-old-space-size=768
 RUN pnpm --filter @impro/web build
 
-FROM caddy:2.10.0-alpine
+FROM caddy:2.11.4-alpine
 COPY infra/docker/web.Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/apps/web/dist /usr/share/caddy
 EXPOSE 80
