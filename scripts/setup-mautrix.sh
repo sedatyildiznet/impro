@@ -78,12 +78,12 @@ p.write_text(t)
 PY
 fi
 
-python3 - "$ROOT/infra/synapse/homeserver.yaml" <<'PY'
+python3 - "$ROOT/infra/synapse/homeserver.yaml" "$ROOT/infra/bridges" <<'PY'
 from pathlib import Path
 import sys
 p = Path(sys.argv[1])
+root = Path(sys.argv[2])
 files = []
-root = Path("/root/impro/infra/bridges")
 for name in ["whatsapp","telegram","signal","instagram","messenger","discord"]:
     reg = root / name / "registration.yaml"
     if reg.exists():
