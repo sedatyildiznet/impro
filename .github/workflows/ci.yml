@@ -19,5 +19,5 @@ jobs:
       - run: pnpm --filter @impro/api typecheck
       - run: pnpm --filter @impro/api test
       - run: pnpm --filter @impro/web build
-      - run: docker compose -f docker-compose.yml config
+      - run: cp .env.example .env && docker compose -f docker-compose.yml config
       - run: npm audit --audit-level=high || true
